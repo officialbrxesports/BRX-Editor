@@ -1,0 +1,75 @@
+/* Step 7B Part 3A: Link To picker. */
+
+.link-picker-trigger {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-picker-trigger:disabled {
+  color: #555;
+  cursor: not-allowed;
+}
+
+.link-picker-trigger-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.link-picker-popup {
+  position: fixed;
+  z-index: 3000;
+  overflow-y: auto;
+  border: 1px solid #555;
+  background: #2b2f34;
+  color: #ddd;
+  font-size: 12px;
+  outline: 0;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+.link-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  cursor: pointer;
+}
+
+.link-picker-row.is-active {
+  background: #3a4048;
+}
+
+.link-picker-row.is-selected .link-picker-label {
+  color: #8fc0ff;
+}
+
+.link-picker-thumb {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 20px;
+  border: 1px solid #555;
+  background: #1c1e21 center / cover no-repeat;
+  color: #888;
+  font-size: 10px;
+}
+
+.link-picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

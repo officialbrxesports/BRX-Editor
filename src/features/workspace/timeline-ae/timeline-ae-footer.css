@@ -1,0 +1,102 @@
+﻿.tl-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 5px;
+  background: #252525;
+  border-top: 1px solid #111;
+  color: #888;
+  font-size: 9px;
+}
+
+.tl-footer-tools,
+.tl-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tl-footer-tools button {
+  width: 13px;
+  height: 16px;
+  color: #8e8e8e;
+}
+
+.tl-render-time {
+  white-space: nowrap;
+}
+
+.tl-render-time b {
+  color: #61bb76;
+  font-weight: 500;
+}
+
+.tl-toggle-modes {
+  height: 18px;
+  margin: 0 auto;
+  padding: 0 8px !important;
+  border-left: 1px solid #3a3a3a !important;
+  border-right: 1px solid #3a3a3a !important;
+  color: #aaa !important;
+  white-space: nowrap;
+}
+
+.tl-zoom {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tl-zoom input {
+  width: 92px;
+  height: 10px;
+  accent-color: #8e8e8e;
+}
+
+.tl-zoom > span {
+  min-width: 28px;
+  text-align: right;
+}
+
+.tl-a11y-count {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.label-none { background: #8b887c; }
+.label-red { background: #b53838; }
+.label-yellow { background: #d8c24a; }
+.label-aqua { background: #5fa9a6; }
+.label-pink { background: #e29a9a; }
+.label-lavender { background: #a98bc0; }
+.label-peach { background: #d9a77c; }
+.label-seafoam { background: #a8c4a2; }
+.label-blue { background: #6f7cb3; }
+.label-green { background: #5b9a5e; }
+.label-purple { background: #8f4f9e; }
+.label-orange { background: #d28b2e; }
+.label-brown { background: #8a5f3e; }
+.label-fuchsia { background: #d260a6; }
+.label-cyan { background: #4ca3c8; }
+.label-sandstone { background: #a4966e; }
+.label-darkgreen { background: #2e5a32; }
+
+@media (max-width: 900px) {
+  .tl-ae-panel {
+    --tl-left-width: 49%;
+    --tl-columns: 12px 12px 12px 12px 16px 16px minmax(60px, 1fr) 11px 11px 11px 11px 11px 11px 11px 11px 60px 12px 48px 78px;
+  }
+
+  .tl-search {
+    width: 130px;
+  }
+
+  .tl-tools {
+    gap: 0;
+  }
+}

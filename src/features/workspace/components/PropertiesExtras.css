@@ -1,0 +1,44 @@
+.property-flip-row {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.property-flip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  height: 28px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #2b2f34;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.property-flip-button:hover:not(:disabled) {
+  background: #363b42;
+}
+
+.property-flip-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.property-select {
+  width: 100%;
+  height: 28px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  background: #2b2f34;
+  color: inherit;
+  font-size: 12px;
+}
+
+.property-border-field {
+  grid-column: 1 / -1;
+}

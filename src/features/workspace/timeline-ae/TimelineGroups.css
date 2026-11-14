@@ -1,0 +1,9 @@
+/* Step 7B Part 3B: groups in the layer list. */
+
+.tl-layer-row.is-grouped .tl-layer-source {
+  padding-left: 14px;
+}
+
+.tl-layer-row.is-group .tl-layer-name {
+  font-weight: 600;
+}
