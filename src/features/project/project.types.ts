@@ -171,7 +171,9 @@ export type KeyframeInterpolation =
   | 'hold'
   | 'ease-in'
   | 'ease-out'
-  | 'ease-in-out';
+  | 'ease-in-out'
+  | 'bounce'
+  | 'elastic';
 
 export type Keyframe = {
   id: string;

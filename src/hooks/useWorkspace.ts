@@ -78,7 +78,26 @@ type UseWorkspaceOptions = {
   project?: Project;
 };
 
+export type Bookmark = { id: string; time: number };
+
+function readBookmarks(key: string): Bookmark[] {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (item): item is Bookmark =>
+            typeof item?.id === 'string' && Number.isFinite(item?.time),
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 type WorkspaceSnapshot = {
+  bookmarks: Bookmark[];
   layers: EditorLayerProperties[];
   projectItems: WorkspaceProjectItem[];
   animations: LayerAnimation[];
@@ -876,8 +895,24 @@ export function useWorkspace({
     [],
   );
 
+  const bookmarksKey = `${STORAGE_PREFIX}${project?.id ?? 'default'}:bookmarks`;
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() =>
+    readBookmarks(bookmarksKey),
+  );
+  const bookmarksRef = useRef<Bookmark[]>(bookmarks);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(bookmarksKey, JSON.stringify(bookmarks));
+    } catch {
+      // Bookmarks are a convenience: failing to save them is not fatal.
+    }
+  }, [bookmarksKey, bookmarks]);
+
   const createSnapshot = useCallback(
     (): WorkspaceSnapshot => ({
+      bookmarks: structuredClone(bookmarksRef.current),
+
       layers: structuredClone(layersRef.current),
 
       projectItems: structuredClone(
@@ -1169,6 +1204,11 @@ export function useWorkspace({
       setProjectItems(restoredProjectItems);
 
       setAnimations(restoredAnimations);
+
+      const restoredBookmarks = structuredClone(snapshot.bookmarks ?? []);
+
+      bookmarksRef.current = restoredBookmarks;
+      setBookmarks(restoredBookmarks);
 
       setDuration(snapshot.duration);
 
@@ -3247,6 +3287,71 @@ export function useWorkspace({
     [pushHistory, addKeyframe],
   );
 
+  // ---- Bookmarks (markers on the ruler) ----
+  const addBookmark = useCallback(
+    (time?: number) => {
+      const at = Math.max(
+        0,
+        Math.min(durationRef.current, time ?? currentTimeRef.current),
+      );
+
+      if (bookmarksRef.current.some((item) => Math.abs(item.time - at) < 0.0005)) {
+        return;
+      }
+
+      pushHistory();
+
+      const next = [
+        ...bookmarksRef.current,
+        { id: createId('bookmark'), time: at },
+      ].sort((a, b) => a.time - b.time);
+
+      bookmarksRef.current = next;
+      setBookmarks(next);
+      setSaveStatus('Unsaved changes');
+    },
+    [pushHistory],
+  );
+
+  const removeBookmark = useCallback(
+    (bookmarkId: string) => {
+      if (!bookmarksRef.current.some((item) => item.id === bookmarkId)) return;
+
+      pushHistory();
+
+      const next = bookmarksRef.current.filter((item) => item.id !== bookmarkId);
+
+      bookmarksRef.current = next;
+      setBookmarks(next);
+      setSaveStatus('Unsaved changes');
+    },
+    [pushHistory],
+  );
+
+  const clearBookmarks = useCallback(() => {
+    if (bookmarksRef.current.length === 0) return;
+
+    pushHistory();
+
+    bookmarksRef.current = [];
+    setBookmarks([]);
+    setSaveStatus('Unsaved changes');
+  }, [pushHistory]);
+
+  // The M key: a bookmark at the playhead, or removes the one that is there.
+  const toggleBookmark = useCallback(() => {
+    const time = currentTimeRef.current;
+    const existing = bookmarksRef.current.find(
+      (item) => Math.abs(item.time - time) < 0.02,
+    );
+
+    if (existing) {
+      removeBookmark(existing.id);
+    } else {
+      addBookmark(time);
+    }
+  }, [addBookmark, removeBookmark]);
+
   const getAnimatedLayer = useCallback(
     (
       layer: EditorLayerProperties,
@@ -3449,6 +3554,11 @@ export function useWorkspace({
     fitLayersToCanvas,
     alignLayers,
     addKeyframesAtPlayhead,
+    bookmarks,
+    addBookmark,
+    removeBookmark,
+    clearBookmarks,
+    toggleBookmark,
 
     projectItems,
 

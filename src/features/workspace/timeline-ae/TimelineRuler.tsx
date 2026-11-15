@@ -1,5 +1,7 @@
 import { useRef } from 'react';
-import type { CSSProperties, PointerEvent } from 'react';
+import type { CSSProperties, MouseEvent, PointerEvent } from 'react';
+
+import type { MenuRequest } from '../WorkspaceMenus';
 
 type TimelineRulerProps = {
   currentTime: number;
@@ -9,6 +11,8 @@ type TimelineRulerProps = {
   timelineWidth: number;
   scrollLeft: number;
   onSeekTime?: (time: number) => void;
+  bookmarks?: Array<{ id: string; time: number }>;
+  onOpenContextMenu?: (request: MenuRequest) => void;
 };
 
 function getTickSteps(pixelsPerSecond: number, fps: number) {
@@ -67,6 +71,8 @@ export default function TimelineRuler({
   timelineWidth,
   scrollLeft,
   onSeekTime,
+  bookmarks = [],
+  onOpenContextMenu,
 }: TimelineRulerProps) {
   const scrubPointer = useRef<number | null>(null);
   const { major, minor, frameBased } = getTickSteps(pixelsPerSecond, fps);
@@ -82,9 +88,6 @@ export default function TimelineRuler({
       style: { left: `${time * pixelsPerSecond}px` } as CSSProperties,
     };
   });
-  const markerTimes = [0.08, 0.31, 0.55, 0.78].map(
-    (fraction) => fraction * duration,
-  );
   const viewWidth = Math.min(100, (800 / timelineWidth) * 100);
   const viewLeft = Math.min(
     100 - viewWidth,
@@ -107,6 +110,32 @@ export default function TimelineRuler({
       </div>
       <div
         className="tl-ruler-viewport"
+        onContextMenu={(event: MouseEvent<HTMLDivElement>) => {
+          event.preventDefault();
+
+          const time = Math.max(
+            0,
+            Math.min(
+              duration,
+              (event.clientX -
+                event.currentTarget.getBoundingClientRect().left +
+                scrollLeft) /
+                pixelsPerSecond,
+            ),
+          );
+
+          const near = bookmarks.find(
+            (bookmark) => Math.abs(bookmark.time - time) * pixelsPerSecond <= 8,
+          );
+
+          onOpenContextMenu?.({
+            kind: 'ruler',
+            x: event.clientX,
+            y: event.clientY,
+            time,
+            bookmarkId: near?.id,
+          });
+        }}
         onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
           if (event.button !== 0) return;
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -135,11 +164,16 @@ export default function TimelineRuler({
           }}
         >
           <div className="tl-marker-band">
-            {markerTimes.map((time, index) => (
+            {bookmarks.map((bookmark, index) => (
               <span
                 className="tl-comp-marker"
-                style={{ left: `${time * pixelsPerSecond}px` }}
-                key={time}
+                style={{ left: bookmark.time * pixelsPerSecond }}
+                key={bookmark.id}
+                title="Bookmark (right-click to remove)"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  onSeekTime?.(bookmark.time);
+                }}
               >
                 {index + 1}
               </span>

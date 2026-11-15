@@ -1,5 +1,24 @@
 import type { Keyframe } from '../project/project.types';
 
+// "Bounce" and "Elastic" settle on the next keyframe like an ease-out.
+function easeOutBounce(x: number): number {
+  const n1 = 7.5625;
+  const d1 = 2.75;
+
+  if (x < 1 / d1) return n1 * x * x;
+  if (x < 2 / d1) return n1 * (x - 1.5 / d1) * (x - 1.5 / d1) + 0.75;
+  if (x < 2.5 / d1) return n1 * (x - 2.25 / d1) * (x - 2.25 / d1) + 0.9375;
+
+  return n1 * (x - 2.625 / d1) * (x - 2.625 / d1) + 0.984375;
+}
+
+function easeOutElastic(x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+
+  return 2 ** (-10 * x) * Math.sin(((x * 10 - 0.75) * (2 * Math.PI)) / 3) + 1;
+}
+
 export function evaluateProperty(
   keyframes: Keyframe[],
   time: number,
@@ -50,6 +69,12 @@ export function evaluateProperty(
         progress = rawProgress < 0.5
           ? 2 * rawProgress * rawProgress
           : 1 - ((-2 * rawProgress + 2) ** 2) / 2;
+        break;
+      case 'bounce':
+        progress = easeOutBounce(rawProgress);
+        break;
+      case 'elastic':
+        progress = easeOutElastic(rawProgress);
         break;
       case 'linear':
       default:

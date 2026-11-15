@@ -84,6 +84,7 @@ type TimelineAeProps = {
   onSplitLayers: (layerIds: string[], time: number) => void;
   onSelectLayer: (layerId: string | null) => void;
   onOpenContextMenu?: (request: MenuRequest) => void;
+  bookmarks?: Array<{ id: string; time: number }>;
   onZoomChange: (zoom: number) => void;
   onCreateLayer: (type: EditorLayerProperties['type']) => void;
   missingMediaIds?: string[];
@@ -186,6 +187,7 @@ export default function TimelineAe({
   onSplitLayers,
   onSelectLayer,
   onOpenContextMenu,
+  bookmarks = [],
   onZoomChange,
   onCreateLayer,
   missingMediaIds = [],
@@ -369,7 +371,7 @@ export default function TimelineAe({
         <div className="tl-edit-tools">
           <button
             type="button"
-            title="Split layer at playhead (Ctrl+Shift+D)"
+            title="Split layer at playhead (S or Ctrl+Shift+D)"
             aria-label="Split layer at playhead"
             disabled={selectedLayerId === null}
             onClick={() => sendTimelineCommand('split')}
@@ -474,6 +476,8 @@ export default function TimelineAe({
           timelineWidth={timelineWidth}
           scrollLeft={scrollLeft}
           onSeekTime={onSeekTime}
+          bookmarks={bookmarks}
+          onOpenContextMenu={onOpenContextMenu}
         />
       </div>
 

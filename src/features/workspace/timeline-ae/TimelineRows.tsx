@@ -22,6 +22,7 @@ import { PropertyRows } from './TimelineProperties';
 import LinkToPicker from './LinkToPicker';
 import './TimelineGroups.css';
 import type { MenuRequest } from '../WorkspaceMenus';
+import ContextMenu, { type ContextMenuItem } from '../../../components/common/ContextMenu';
 
 type TimelineRowsProps = {
   layers: EditorLayerProperties[];
@@ -323,6 +324,12 @@ export default function TimelineRows({
   const openNewLayerMenu = (event: MouseEvent<HTMLDivElement>) => {
     if (event.target !== event.currentTarget) return;
     event.preventDefault();
+
+    if (onOpenContextMenu) {
+      onOpenContextMenu({ kind: 'timeline', x: event.clientX, y: event.clientY });
+      return;
+    }
+
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -456,6 +463,50 @@ export default function TimelineRows({
     setSelectionVersion((version) => version + 1);
   };
 
+  // Touch: pressing and holding (without moving) opens the menu.
+  const longPressRef = useRef<number | null>(null);
+
+  const cancelLongPress = () => {
+    if (longPressRef.current !== null) {
+      window.clearTimeout(longPressRef.current);
+      longPressRef.current = null;
+    }
+  };
+
+  const startLongPress = (event: PointerEvent<HTMLElement>, open: () => void) => {
+    if (event.pointerType !== 'touch') return;
+
+    cancelLongPress();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    const stop = () => {
+      cancelLongPress();
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+    };
+
+    const onMove = (moveEvent: globalThis.PointerEvent) => {
+      if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 8) {
+        stop();
+      }
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', stop);
+    window.addEventListener('pointercancel', stop);
+
+    longPressRef.current = window.setTimeout(() => {
+      longPressRef.current = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', stop);
+      window.removeEventListener('pointercancel', stop);
+      open();
+    }, 500);
+  };
+
   // Remember where the lanes are now, so they can slide to the new order.
   const rememberLanePositions = () => {
     const tops = new Map<string, number>();
@@ -508,6 +559,9 @@ export default function TimelineRows({
     lastSelectedRef.current = layer.id;
     setSelectionVersion((version) => version + 1);
     callbacksRef.current.onSelectLayer(layer.id);
+    startLongPress(event, () =>
+      openLayerMenu(event.clientX, event.clientY, layer.id),
+    );
     const captureElement = target.dataset.edge ? target : event.currentTarget;
     captureElement.setPointerCapture(event.pointerId);
     layerBarRef.current = {
@@ -953,6 +1007,41 @@ export default function TimelineRows({
     return () => window.removeEventListener('brx-timeline-command', onCommand);
   }, []);
 
+  // Tells the rest of the editor what is selected (the shortcuts use it).
+  const lastBroadcastRef = useRef('');
+
+  useEffect(() => {
+    const ids = selectedIdsRef.current;
+    const keyframes = selectedKeyframesRef.current.length;
+    const signature = ids.join(',') + '|' + keyframes;
+
+    if (signature === lastBroadcastRef.current) return;
+
+    lastBroadcastRef.current = signature;
+    window.dispatchEvent(
+      new CustomEvent('brx-selection', { detail: { ids: [...ids], keyframes } }),
+    );
+  });
+
+  // "Zoom to Fit" from the menus: the whole composition across the lanes.
+  useEffect(() => {
+    const onFit = () => {
+      const width = timeRef.current?.clientWidth ?? 0;
+
+      if (width > 0 && duration > 0 && onZoomChange) {
+        onZoomChange(Math.min(400, Math.max(25, width / (duration * 0.6))));
+
+        if (timeRef.current) {
+          timeRef.current.scrollLeft = 0;
+        }
+      }
+    };
+
+    window.addEventListener('brx-timeline-zoom-fit', onFit);
+
+    return () => window.removeEventListener('brx-timeline-zoom-fit', onFit);
+  }, [duration, onZoomChange]);
+
   // The right-click menu asks for these two through events.
   useEffect(() => {
     const onRename = (event: Event) => {
@@ -1231,6 +1320,9 @@ export default function TimelineRows({
       return;
     }
     event.preventDefault();
+    startLongPress(event, () =>
+      onOpenContextMenu?.({ kind: 'timeline', x: event.clientX, y: event.clientY }),
+    );
     const track = event.currentTarget;
     const bounds = track.getBoundingClientRect();
     const startX = event.clientX + track.scrollLeft;
@@ -1434,6 +1526,11 @@ export default function TimelineRows({
         return;
       }
 
+      // A right-click menu owns the keyboard while it is open.
+      if (document.querySelector('.cm-root')) {
+        return;
+      }
+
       // Selected keyframes keep their own handling in the timeline.
       if (selectedKeyframesRef.current.length > 0) {
         return;
@@ -1516,6 +1613,79 @@ export default function TimelineRows({
 
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [layers, selectedLayerId, onDeleteLayers, onUpdateLayers, onBeginLayerEdit, onSelectLayer]);
+
+  const keyframeMenuItems = (): ContextMenuItem[] => {
+    const current = keyframeContextMenu
+      ? getKeyframe(keyframeContextMenu.target)?.interpolation
+      : undefined;
+
+    const choice = (
+      id: string,
+      label: string,
+      value: Keyframe['interpolation'],
+    ): ContextMenuItem => ({
+      id,
+      label,
+      checked: current === value,
+      onSelect: () => updateSelectedKeyframesInterpolation(value),
+    });
+
+    return [
+      { id: 'delete', label: 'Delete', shortcut: 'Delete', onSelect: deleteSelectedKeyframes },
+      {
+        id: 'copy',
+        label: 'Copy',
+        shortcut: 'Ctrl+C',
+        onSelect: () => {
+          keyframeClipboardRef.current = selectedKeyframesRef.current.flatMap((target) => {
+            const keyframe = getKeyframe(target);
+            return keyframe ? [{ ...target, keyframe: { ...keyframe } }] : [];
+          });
+          setKeyframeContextMenu(null);
+        },
+      },
+      {
+        id: 'paste',
+        label: 'Paste at Playhead',
+        shortcut: 'Ctrl+V',
+        disabled: keyframeClipboardRef.current.length === 0,
+        onSelect: () => {
+          const clipboard = keyframeClipboardRef.current;
+          if (clipboard.length === 0) return;
+          const origin = Math.min(...clipboard.map((item) => item.keyframe.time));
+          onBeginLayerEdit();
+          clipboard.forEach((item) =>
+            onAddKeyframe(
+              item.layerId,
+              item.propertyName,
+              item.keyframe.value,
+              currentTime + item.keyframe.time - origin,
+              item.keyframe.interpolation,
+              false,
+            ),
+          );
+          setKeyframeContextMenu(null);
+        },
+      },
+      { type: 'separator' },
+      choice('linear', 'Linear', 'linear'),
+      choice('hold', 'Hold', 'hold'),
+      choice('ease-in', 'Ease In', 'ease-in'),
+      choice('ease-out', 'Ease Out', 'ease-out'),
+      choice('ease-in-out', 'Ease In-Out', 'ease-in-out'),
+      choice('bounce', 'Bounce', 'bounce'),
+      choice('elastic', 'Elastic', 'elastic'),
+      { type: 'separator' },
+      {
+        id: 'curve-editor',
+        label: 'Open Curve Editor',
+        onSelect: () =>
+          window.dispatchEvent(
+            new CustomEvent('brx-notify', { detail: 'Curve Editor: Coming soon' }),
+          ),
+      },
+    ];
+  };
 
   return (
     <div className="tl-row-viewport">
@@ -1861,6 +2031,14 @@ export default function TimelineRows({
           tabIndex={0}
           onKeyDown={handleTimelineKeyDown}
           onPointerDown={beginMarquee}
+          onContextMenu={(event) => {
+            const target = event.target as HTMLElement;
+
+            if (target.closest('.tl-layer-bar, .tl-layer-edge, .tl-keyframe')) return;
+
+            event.preventDefault();
+            onOpenContextMenu?.({ kind: 'timeline', x: event.clientX, y: event.clientY });
+          }}
         >
           {displayLayers.map((layer) => {
             const selected = layer.id === selectedLayerId || selectedIdsRef.current.includes(layer.id);
@@ -1991,26 +2169,13 @@ export default function TimelineRows({
             <div className="tl-insertion-line" style={{ top: insertionLine - (timeRef.current?.getBoundingClientRect().top ?? 0) + (timeRef.current?.scrollTop ?? 0) }} />
           )}
           {keyframeContextMenu && (
-            <label
-              className="tl-keyframe-menu"
-              style={{ left: keyframeContextMenu.x, top: keyframeContextMenu.y }}
-              onPointerDown={(event) => event.stopPropagation()}
-            >
-              Interpolation
-              <select
-                aria-label="Keyframe interpolation"
-                value={getKeyframe(keyframeContextMenu.target)?.interpolation ?? 'linear'}
-                onChange={(event) => updateSelectedKeyframesInterpolation(
-                  event.currentTarget.value as Keyframe['interpolation'],
-                )}
-              >
-                <option value="linear">Linear</option>
-                <option value="hold">Hold</option>
-                <option value="ease-in">Ease In</option>
-                <option value="ease-out">Ease Out</option>
-                <option value="ease-in-out">Easy Ease</option>
-              </select>
-            </label>
+            <ContextMenu
+              key={keyframeContextMenu.x + ':' + keyframeContextMenu.y}
+              x={keyframeContextMenu.x}
+              y={keyframeContextMenu.y}
+              items={keyframeMenuItems()}
+              onClose={() => setKeyframeContextMenu(null)}
+            />
           )}
         </div>
       </div>

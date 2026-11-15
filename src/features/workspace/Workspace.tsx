@@ -24,6 +24,7 @@ import type {
 
 import { useWorkspace } from '../../hooks/useWorkspace';
 import WorkspaceMenus, { type MenuRequest } from './WorkspaceMenus';
+import { isTypingTarget } from '../../utils/shortcuts';
 
 import './Workspace.css';
 import '../../styles/ae-theme.css';
@@ -103,6 +104,132 @@ export default function Workspace({
 
   const [menuRequest, setMenuRequest] = useState<MenuRequest | null>(null);
   const closeMenu = useCallback(() => setMenuRequest(null), []);
+
+  const selectionRef = useRef<{ ids: string[]; keyframes: number }>({
+    ids: [],
+    keyframes: 0,
+  });
+  const editorRef = useRef(editor);
+
+  useEffect(() => {
+    editorRef.current = editor;
+  });
+
+  // The timeline reports its selection, and asks for messages, through events.
+  useEffect(() => {
+    const onSelection = (event: Event) => {
+      const detail = (event as CustomEvent<{ ids: string[]; keyframes: number }>).detail;
+
+      if (detail) {
+        selectionRef.current = detail;
+      }
+    };
+
+    const onNotify = (event: Event) => {
+      const message = (event as CustomEvent<string>).detail;
+
+      if (message) {
+        notify(message);
+      }
+    };
+
+    window.addEventListener('brx-selection', onSelection);
+    window.addEventListener('brx-notify', onNotify);
+
+    return () => {
+      window.removeEventListener('brx-selection', onSelection);
+      window.removeEventListener('brx-notify', onNotify);
+    };
+  }, [notify]);
+
+  // Desktop shortcuts (ignored while typing): Ctrl+C / X / V / D / G,
+  // Ctrl+Shift+G, S = split, M = bookmark, Left / Right = one frame
+  // (Shift = ten frames). Space, Home, End, Delete and Ctrl+A live elsewhere.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target) || document.querySelector('.cm-root')) {
+        return;
+      }
+
+      const api = editorRef.current;
+      const { ids: selected, keyframes } = selectionRef.current;
+      const ids =
+        selected.length > 0
+          ? selected
+          : api.selectedLayerId
+            ? [api.selectedLayerId]
+            : [];
+      const modifier = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      const handled = () => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      };
+
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        if (modifier || event.altKey) return;
+
+        handled();
+        const step = (event.shiftKey ? 10 : 1) / Math.max(1, api.fps);
+        api.seekTimeline(
+          api.getCurrentTime() + (event.key === 'ArrowRight' ? step : -step),
+        );
+        return;
+      }
+
+      if (event.repeat) return;
+
+      if (modifier && !event.altKey) {
+        // Selected keyframes keep their own copy and paste in the timeline.
+        if (keyframes > 0 && (key === 'c' || key === 'x' || key === 'v')) return;
+
+        if (key === 'c' && !event.shiftKey && ids.length > 0) {
+          if (window.getSelection()?.toString()) return;
+          handled();
+          api.copyLayers(ids);
+        } else if (key === 'x' && !event.shiftKey && ids.length > 0) {
+          handled();
+          api.cutLayers(ids);
+        } else if (key === 'v' && !event.shiftKey && api.clipboardCount > 0) {
+          handled();
+          api.pasteLayers();
+        } else if (key === 'd' && !event.shiftKey && ids.length > 0) {
+          handled();
+          api.duplicateLayers(ids);
+        } else if (key === 'g' && ids.length > 0) {
+          handled();
+          if (event.shiftKey) {
+            api.ungroupLayers(ids);
+          } else {
+            api.groupLayers(ids);
+          }
+        }
+
+        return;
+      }
+
+      if (modifier || event.altKey || event.shiftKey) return;
+
+      if (key === 's' && ids.length > 0) {
+        handled();
+        api.splitLayers(ids, api.getCurrentTime());
+      } else if (key === 'm') {
+        handled();
+        api.toggleBookmark();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, []);
+
+  const menuExtras = {
+    snapping,
+    toggleSnapping: () => setSnapping((value) => !value),
+    openMediaPicker: () => openMediaPicker(),
+    getSelection: () => selectionRef.current.ids,
+  };
 
   const importMediaFiles = useCallback(
     async (files: File[], addToTimeline = false) => {
@@ -613,6 +740,7 @@ export default function Workspace({
               onBeginLayerEdit={editor.beginLayerEdit}
               onUpdateLayers={editor.updateLayers}
               onOpenContextMenu={setMenuRequest}
+              bookmarks={editor.bookmarks}
               onAddKeyframe={editor.addKeyframe}
               onUpdateKeyframe={editor.updateKeyframe}
               onDeleteKeyframe={editor.deleteKeyframe}
@@ -651,7 +779,7 @@ export default function Workspace({
         <span>{editor.saveStatus}</span>
       </footer>
       {toast && <div className="workspace-toast" role="status" aria-live="polite">{toast}</div>}
-      <WorkspaceMenus editor={editor} request={menuRequest} notify={notify} onClose={closeMenu} />
+      <WorkspaceMenus editor={editor} request={menuRequest} extras={menuExtras} notify={notify} onClose={closeMenu} />
     </main>
   );
 }

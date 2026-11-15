@@ -27,7 +27,7 @@ import type { EditorLayerProperties } from '../project/project.types';
 // Every entry calls the same store action as the toolbar, so each one is a
 // single undo step.
 
-export type MenuRequest = {
+export type LayerMenuRequest = {
   kind: 'layer';
   x: number;
   y: number;
@@ -35,11 +35,25 @@ export type MenuRequest = {
   ids: string[];
 };
 
+export type MenuRequest =
+  | LayerMenuRequest
+  | { kind: 'timeline'; x: number; y: number }
+  | { kind: 'ruler'; x: number; y: number; time: number; bookmarkId?: string };
+
+// Things the menus need from the workspace that are not part of the store.
+export type MenuExtras = {
+  snapping: boolean;
+  toggleSnapping: () => void;
+  openMediaPicker: () => void;
+  getSelection: () => string[];
+};
+
 type EditorApi = ReturnType<typeof useWorkspace>;
 
 type WorkspaceMenusProps = {
   editor: EditorApi;
   request: MenuRequest | null;
+  extras: MenuExtras;
   notify: (message: string) => void;
   onClose: () => void;
 };
@@ -50,7 +64,7 @@ function formatSeconds(seconds: number): string {
 
 function buildLayerMenu(
   editor: EditorApi,
-  request: MenuRequest,
+  request: LayerMenuRequest,
   notify: (message: string) => void,
 ): ContextMenuItem[] {
   const layers = editor.layers;
@@ -343,9 +357,131 @@ function buildLayerMenu(
   return items;
 }
 
+const separatorItem: ContextMenuItem = { type: 'separator' };
+
+function zoomItems(editor: EditorApi): ContextMenuItem[] {
+  return [
+    {
+      id: 'zoom-fit',
+      label: 'Zoom to Fit',
+      onSelect: () => window.dispatchEvent(new CustomEvent('brx-timeline-zoom-fit')),
+    },
+    {
+      id: 'zoom-in',
+      label: 'Zoom In',
+      onSelect: () => editor.updateTimelineZoom(editor.timelineZoom * 1.25),
+    },
+    {
+      id: 'zoom-out',
+      label: 'Zoom Out',
+      onSelect: () => editor.updateTimelineZoom(editor.timelineZoom / 1.25),
+    },
+  ];
+}
+
+// Right-click on an empty part of the timeline.
+function buildTimelineMenu(
+  editor: EditorApi,
+  extras: MenuExtras,
+  notify: (message: string) => void,
+): ContextMenuItem[] {
+  const selection = extras.getSelection();
+  const soon = (label: string) => () => notify(`${label}: Coming soon`);
+
+  return [
+    {
+      id: 'paste',
+      label: 'Paste',
+      shortcut: SHORTCUT.paste,
+      disabled: editor.clipboardCount === 0,
+      onSelect: () => editor.pasteLayers(),
+    },
+    {
+      id: 'select-all',
+      label: 'Select All',
+      shortcut: SHORTCUT.selectAll,
+      onSelect: () => window.dispatchEvent(new CustomEvent('brx-timeline-select-all')),
+    },
+    separatorItem,
+    {
+      id: 'add-layer',
+      label: 'Add Layer',
+      children: [
+        { id: 'add-media', label: 'Media...', onSelect: extras.openMediaPicker },
+        {
+          id: 'add-group',
+          label: 'Group',
+          disabled: selection.length === 0,
+          onSelect: () => editor.groupLayers(selection),
+        },
+        { id: 'add-text', label: 'Text', onSelect: () => editor.addLayer('text') },
+        { id: 'add-text-3d', label: 'Text 3D', onSelect: soon('Text 3D') },
+        { id: 'add-shape', label: 'Shape', onSelect: () => editor.addLayer('shape') },
+        {
+          id: 'add-adjustment',
+          label: 'Adjustment Layer',
+          onSelect: () => editor.addLayer('adjustment'),
+        },
+        { id: 'add-fill', label: 'Fill', onSelect: () => editor.addLayer('solid') },
+        { id: 'add-3d', label: '3D', onSelect: soon('3D') },
+      ],
+    },
+    separatorItem,
+    {
+      id: 'bookmark',
+      label: 'Add Bookmark at Playhead',
+      shortcut: SHORTCUT.bookmark,
+      onSelect: () => editor.addBookmark(),
+    },
+    separatorItem,
+    ...zoomItems(editor),
+    separatorItem,
+    {
+      id: 'snapping',
+      label: extras.snapping ? 'Disable Snapping' : 'Enable Snapping',
+      onSelect: extras.toggleSnapping,
+    },
+  ];
+}
+
+// Right-click on a ruler.
+function buildRulerMenu(
+  editor: EditorApi,
+  request: Extract<MenuRequest, { kind: 'ruler' }>,
+): ContextMenuItem[] {
+  const bookmarkId = request.bookmarkId;
+
+  return [
+    {
+      id: 'bookmark',
+      label: bookmarkId ? 'Remove Bookmark' : 'Add Bookmark here',
+      onSelect: () =>
+        bookmarkId
+          ? editor.removeBookmark(bookmarkId)
+          : editor.addBookmark(request.time),
+    },
+    {
+      id: 'clear-bookmarks',
+      label: 'Clear All Bookmarks',
+      disabled: editor.bookmarks.length === 0,
+      onSelect: () => editor.clearBookmarks(),
+    },
+    separatorItem,
+    { id: 'jump-start', label: 'Jump to Start', onSelect: () => editor.seekTimeline(0) },
+    {
+      id: 'jump-end',
+      label: 'Jump to End',
+      onSelect: () => editor.seekTimeline(editor.duration),
+    },
+    separatorItem,
+    zoomItems(editor)[0],
+  ];
+}
+
 export default function WorkspaceMenus({
   editor,
   request,
+  extras,
   notify,
   onClose,
 }: WorkspaceMenusProps) {
@@ -353,7 +489,12 @@ export default function WorkspaceMenus({
     return null;
   }
 
-  const items = buildLayerMenu(editor, request, notify);
+  const items =
+    request.kind === 'layer'
+      ? buildLayerMenu(editor, request, notify)
+      : request.kind === 'timeline'
+        ? buildTimelineMenu(editor, extras, notify)
+        : buildRulerMenu(editor, request);
 
   if (items.length === 0) {
     return null;
@@ -361,7 +502,7 @@ export default function WorkspaceMenus({
 
   return (
     <ContextMenu
-      key={`${request.x}:${request.y}:${request.layerId}`}
+      key={`${request.kind}:${request.x}:${request.y}`}
       x={request.x}
       y={request.y}
       items={items}
