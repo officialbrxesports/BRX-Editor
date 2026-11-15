@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useSyncExternalStore,
   useState,
 } from 'react';
 
@@ -27,6 +28,13 @@ import PreviewOverlay, { type PreviewOverlayApi } from './PreviewOverlay';
 import { applyGroupInheritance } from '../groupUtils';
 import type { MenuRequest } from '../WorkspaceMenus';
 import './PreviewOverlay.css';
+import {
+  getPreviewResolution,
+  PREVIEW_RESOLUTIONS,
+  setPreviewResolution,
+  subscribePreviewResolution,
+  type PreviewResolution,
+} from './previewResolution';
 
 type PreviewPanelProps = {
   width?: number;
@@ -52,6 +60,8 @@ type PreviewPanelProps = {
   onTogglePlayback?: () => void;
   onStopPlayback?: () => void;
   onToggleMute?: () => void;
+  isLooping?: boolean;
+  onToggleLoop?: () => void;
   onZoomChange?: (zoom: number) => void;
   onEditText?: (layerId: string, text: string) => void;
   onMediaDecodeError?: (name: string) => void;
@@ -133,6 +143,8 @@ export default function PreviewPanel({
   onTogglePlayback,
   onStopPlayback,
   onToggleMute,
+  isLooping = false,
+  onToggleLoop,
   onZoomChange,
   onEditText,
   onMediaDecodeError,
@@ -291,6 +303,10 @@ export default function PreviewPanel({
   const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [showNavigator, setShowNavigator] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
+  const previewResolution = useSyncExternalStore(
+    subscribePreviewResolution,
+    getPreviewResolution,
+  );
   const [spaceHeld, setSpaceHeld] = useState(false);
 
   const spaceHeldRef = useRef(false);
@@ -1470,6 +1486,17 @@ export default function PreviewPanel({
             <MaterialIcon name="stop" size={14} />
           </button>
 
+          <button
+            className={'preview-control-button' + (isLooping ? ' is-active' : '')}
+            type="button"
+            title={isLooping ? 'Loop is on: playback repeats' : 'Loop is off: playback stops at the end'}
+            aria-label="Loop playback"
+            aria-pressed={isLooping}
+            onClick={onToggleLoop}
+          >
+            <MaterialIcon name="repeat" size={14} />
+          </button>
+
           <span className="preview-time">
             {formatTime(currentTime, fps)}
           </span>
@@ -1533,6 +1560,22 @@ export default function PreviewPanel({
           >
             <MaterialIcon name="zoom_in" size={14} />
           </button>
+
+          <select
+            className="preview-resolution"
+            title="Preview resolution (only the preview, not the project)"
+            aria-label="Preview resolution"
+            value={previewResolution}
+            onChange={(event) =>
+              setPreviewResolution(event.currentTarget.value as PreviewResolution)
+            }
+          >
+            {PREVIEW_RESOLUTIONS.map((item) => (
+              <option value={item.value} key={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
 
           <span className="preview-fps">
             {fps} FPS

@@ -216,6 +216,12 @@ export default function Workspace({
       } else if (key === 'm') {
         handled();
         api.toggleBookmark();
+      } else if (key === 'b') {
+        handled();
+        api.setWorkAreaStart();
+      } else if (key === 'n') {
+        handled();
+        api.setWorkAreaEnd();
       }
     };
 
@@ -630,6 +636,8 @@ export default function Workspace({
               selectedLayerId={editor.selectedLayerId}
               onSelectLayer={editor.selectLayer}
               onOpenContextMenu={setMenuRequest}
+              isLooping={editor.loopPlayback}
+              onToggleLoop={editor.toggleLoopPlayback}
               onBeginLayerEdit={editor.beginLayerEdit}
               onLiveTransform={(layerId, updates, names = []) => {
                 const animation = editor.animations.find((item) => item.layerId === layerId);
@@ -741,6 +749,8 @@ export default function Workspace({
               onUpdateLayers={editor.updateLayers}
               onOpenContextMenu={setMenuRequest}
               bookmarks={editor.bookmarks}
+              workArea={editor.workArea}
+              onWorkAreaChange={editor.setWorkAreaRange}
               onAddKeyframe={editor.addKeyframe}
               onUpdateKeyframe={editor.updateKeyframe}
               onDeleteKeyframe={editor.deleteKeyframe}

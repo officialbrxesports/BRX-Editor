@@ -80,6 +80,32 @@ type UseWorkspaceOptions = {
 
 export type Bookmark = { id: string; time: number };
 
+export type WorkArea = { start: number; end: number };
+
+function readWorkArea(key: string): WorkArea | null {
+  try {
+    const raw = localStorage.getItem(key);
+    const item = (raw ? JSON.parse(raw) : null) as Partial<WorkArea> | null;
+
+    return item &&
+      Number.isFinite(item.start) &&
+      Number.isFinite(item.end) &&
+      (item.end as number) > (item.start as number)
+      ? { start: item.start as number, end: item.end as number }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readLoopPlayback(): boolean {
+  try {
+    return localStorage.getItem('brx-editor-loop-playback') === '1';
+  } catch {
+    return false;
+  }
+}
+
 function readBookmarks(key: string): Bookmark[] {
   try {
     const raw = localStorage.getItem(key);
@@ -98,6 +124,7 @@ function readBookmarks(key: string): Bookmark[] {
 
 type WorkspaceSnapshot = {
   bookmarks: Bookmark[];
+  workArea: WorkArea | null;
   layers: EditorLayerProperties[];
   projectItems: WorkspaceProjectItem[];
   animations: LayerAnimation[];
@@ -909,9 +936,34 @@ export function useWorkspace({
     }
   }, [bookmarksKey, bookmarks]);
 
+  const workAreaKey = STORAGE_PREFIX + (project?.id ?? 'default') + ':workarea';
+  const [workArea, setWorkArea] = useState<WorkArea | null>(() =>
+    readWorkArea(workAreaKey),
+  );
+  const workAreaRef = useRef<WorkArea | null>(workArea);
+  const [loopPlayback, setLoopPlayback] = useState<boolean>(readLoopPlayback);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(workAreaKey, JSON.stringify(workArea));
+    } catch {
+      // The work area is saved as a convenience: failing is not fatal.
+    }
+  }, [workAreaKey, workArea]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('brx-editor-loop-playback', loopPlayback ? '1' : '0');
+    } catch {
+      // Remembering the loop choice is a convenience only.
+    }
+  }, [loopPlayback]);
+
   const createSnapshot = useCallback(
     (): WorkspaceSnapshot => ({
       bookmarks: structuredClone(bookmarksRef.current),
+
+      workArea: workAreaRef.current ? { ...workAreaRef.current } : null,
 
       layers: structuredClone(layersRef.current),
 
@@ -1210,6 +1262,11 @@ export function useWorkspace({
       bookmarksRef.current = restoredBookmarks;
       setBookmarks(restoredBookmarks);
 
+      const restoredWorkArea = snapshot.workArea ?? null;
+
+      workAreaRef.current = restoredWorkArea;
+      setWorkArea(restoredWorkArea);
+
       setDuration(snapshot.duration);
 
       setBackgroundColor(
@@ -1371,9 +1428,21 @@ export function useWorkspace({
       return;
     }
 
+    // Playback stays inside the work area (the whole composition if none).
+    const rangeStart = workArea ? Math.max(0, workArea.start) : 0;
+    const rangeEnd = workArea ? Math.min(duration, workArea.end) : duration;
+
+    if (rangeEnd <= rangeStart) {
+      return;
+    }
+
     const startedAt = performance.now();
 
-    const startTime = currentTimeRef.current;
+    let startTime = currentTimeRef.current;
+
+    if (startTime < rangeStart || startTime >= rangeEnd) {
+      startTime = rangeStart;
+    }
 
     const safeFps = Math.max(1, fps);
 
@@ -1393,14 +1462,19 @@ export function useWorkspace({
       if (elapsedFrames !== lastFrame) {
         lastFrame = elapsedFrames;
 
-        const next = Math.min(
-          startTime + elapsedFrames / safeFps,
-          duration,
-        );
+        let next = startTime + elapsedFrames / safeFps;
+        let finished = false;
+
+        if (next >= rangeEnd) {
+          if (loopPlayback) {
+            next = rangeStart + ((next - rangeStart) % (rangeEnd - rangeStart));
+          } else {
+            next = rangeEnd;
+            finished = true;
+          }
+        }
 
         currentTimeRef.current = next;
-
-        const finished = next >= duration;
 
         if (finished || now - lastStateUpdate >= UI_TIME_INTERVAL_MS) {
           lastStateUpdate = now;
@@ -1424,7 +1498,7 @@ export function useWorkspace({
       window.cancelAnimationFrame(animationFrame);
       setCurrentTime(currentTimeRef.current);
     };
-  }, [isPlaying, fps, duration]);
+  }, [isPlaying, fps, duration, workArea, loopPlayback]);
 
   const togglePlayback = useCallback(() => {
     if (isPlaying) {
@@ -1436,12 +1510,16 @@ export function useWorkspace({
       return;
     }
 
+    const range = workAreaRef.current;
+    const rangeStart = range ? range.start : 0;
+    const rangeEnd = range ? range.end : durationRef.current;
+
     if (
-      currentTimeRef.current >=
-      durationRef.current
+      currentTimeRef.current >= rangeEnd - 1e-6 ||
+      currentTimeRef.current < rangeStart - 1e-6
     ) {
-      currentTimeRef.current = 0;
-      setCurrentTime(0);
+      currentTimeRef.current = rangeStart;
+      setCurrentTime(rangeStart);
     }
 
     setIsPlaying(true);
@@ -3352,6 +3430,80 @@ export function useWorkspace({
     }
   }, [addBookmark, removeBookmark]);
 
+  // ---- Work area (the part of the timeline that plays and exports) ----
+  const setWorkAreaRange = useCallback(
+    (start: number, end: number, recordHistory = true) => {
+      const length = durationRef.current;
+      const minimum = 1 / Math.max(1, fps);
+
+      let from = clamp(start, 0, length);
+      let to = clamp(end, 0, length);
+
+      if (to - from < minimum) {
+        if (from + minimum <= length) {
+          to = from + minimum;
+        } else {
+          from = Math.max(0, to - minimum);
+        }
+      }
+
+      // The whole composition is the same as no work area.
+      const next: WorkArea | null =
+        from <= 0.0005 && to >= length - 0.0005 ? null : { start: from, end: to };
+
+      const current = workAreaRef.current;
+
+      if (
+        (next === null && current === null) ||
+        (next && current && next.start === current.start && next.end === current.end)
+      ) {
+        return;
+      }
+
+      if (recordHistory) {
+        pushHistory();
+      }
+
+      workAreaRef.current = next;
+      setWorkArea(next);
+      setSaveStatus('Unsaved changes');
+    },
+    [fps, pushHistory],
+  );
+
+  // The B key: work area starts at the playhead.
+  const setWorkAreaStart = useCallback(
+    (time?: number) => {
+      const at = time ?? currentTimeRef.current;
+      const current = workAreaRef.current;
+
+      setWorkAreaRange(
+        at,
+        current && current.end > at ? current.end : durationRef.current,
+      );
+    },
+    [setWorkAreaRange],
+  );
+
+  // The N key: work area ends at the playhead.
+  const setWorkAreaEnd = useCallback(
+    (time?: number) => {
+      const at = time ?? currentTimeRef.current;
+      const current = workAreaRef.current;
+
+      setWorkAreaRange(current && current.start < at ? current.start : 0, at);
+    },
+    [setWorkAreaRange],
+  );
+
+  const resetWorkArea = useCallback(() => {
+    setWorkAreaRange(0, durationRef.current);
+  }, [setWorkAreaRange]);
+
+  const toggleLoopPlayback = useCallback(() => {
+    setLoopPlayback((value) => !value);
+  }, []);
+
   const getAnimatedLayer = useCallback(
     (
       layer: EditorLayerProperties,
@@ -3559,6 +3711,13 @@ export function useWorkspace({
     removeBookmark,
     clearBookmarks,
     toggleBookmark,
+    workArea,
+    setWorkAreaRange,
+    setWorkAreaStart,
+    setWorkAreaEnd,
+    resetWorkArea,
+    loopPlayback,
+    toggleLoopPlayback,
 
     projectItems,
 

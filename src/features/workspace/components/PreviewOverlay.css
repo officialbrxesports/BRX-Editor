@@ -135,3 +135,14 @@
 .preview-zoom-badge:hover {
   background: #2b2f34;
 }
+
+/* ===== Part 6: preview resolution ===== */
+.preview-resolution {
+  height: 20px;
+  max-width: 82px;
+  border: 1px solid #444;
+  border-radius: 3px;
+  background: #1f2226;
+  color: #ddd;
+  font-size: 11px;
+}

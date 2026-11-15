@@ -85,6 +85,8 @@ type TimelineAeProps = {
   onSelectLayer: (layerId: string | null) => void;
   onOpenContextMenu?: (request: MenuRequest) => void;
   bookmarks?: Array<{ id: string; time: number }>;
+  workArea?: { start: number; end: number } | null;
+  onWorkAreaChange?: (start: number, end: number, recordHistory: boolean) => void;
   onZoomChange: (zoom: number) => void;
   onCreateLayer: (type: EditorLayerProperties['type']) => void;
   missingMediaIds?: string[];
@@ -188,6 +190,8 @@ export default function TimelineAe({
   onSelectLayer,
   onOpenContextMenu,
   bookmarks = [],
+  workArea = null,
+  onWorkAreaChange,
   onZoomChange,
   onCreateLayer,
   missingMediaIds = [],
@@ -478,6 +482,11 @@ export default function TimelineAe({
           onSeekTime={onSeekTime}
           bookmarks={bookmarks}
           onOpenContextMenu={onOpenContextMenu}
+          workArea={workArea}
+          onWorkAreaChange={onWorkAreaChange}
+          onBeginEdit={() => {
+            onBeginLayerEdit();
+          }}
         />
       </div>
 
@@ -513,6 +522,7 @@ export default function TimelineAe({
         onSplitLayers={onSplitLayers}
         onSelectLayer={onSelectLayer}
         onOpenContextMenu={onOpenContextMenu}
+        workArea={workArea}
         onScrollLeft={setScrollLeft}
         onCreateLayer={onCreateLayer}
         visibleExtraColumns={visibleExtraColumns}

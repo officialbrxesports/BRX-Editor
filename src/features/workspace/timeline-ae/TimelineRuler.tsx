@@ -13,6 +13,9 @@ type TimelineRulerProps = {
   onSeekTime?: (time: number) => void;
   bookmarks?: Array<{ id: string; time: number }>;
   onOpenContextMenu?: (request: MenuRequest) => void;
+  workArea?: { start: number; end: number } | null;
+  onWorkAreaChange?: (start: number, end: number, recordHistory: boolean) => void;
+  onBeginEdit?: () => void;
 };
 
 function getTickSteps(pixelsPerSecond: number, fps: number) {
@@ -73,7 +76,75 @@ export default function TimelineRuler({
   onSeekTime,
   bookmarks = [],
   onOpenContextMenu,
+  workArea = null,
+  onWorkAreaChange,
+  onBeginEdit,
 }: TimelineRulerProps) {
+  const workStart = workArea?.start ?? 0;
+  const workEnd = workArea?.end ?? duration;
+
+  // Drag a handle (start / end) or the bar itself (move both ends).
+  // Times snap to whole frames. One undo step for the whole drag.
+  const beginWorkAreaDrag = (
+    event: PointerEvent<HTMLElement>,
+    mode: 'start' | 'end' | 'move',
+  ) => {
+    const viewport = event.currentTarget.closest<HTMLElement>('.tl-ruler-viewport');
+
+    if (!onWorkAreaChange || !viewport || event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = event.currentTarget;
+    const bounds = viewport.getBoundingClientRect();
+    const frame = 1 / Math.max(1, fps);
+    const original = { start: workStart, end: workEnd };
+    const timeAt = (clientX: number) =>
+      (clientX - bounds.left + scrollLeft) / pixelsPerSecond;
+    const snap = (value: number) => Math.round(value / frame) * frame;
+    const grabbedAt = timeAt(event.clientX);
+    let started = false;
+
+    target.setPointerCapture(event.pointerId);
+
+    const onMove = (moveEvent: globalThis.PointerEvent) => {
+      const time = timeAt(moveEvent.clientX);
+      let start = original.start;
+      let end = original.end;
+
+      if (mode === 'start') {
+        start = Math.min(snap(time), end - frame);
+      } else if (mode === 'end') {
+        end = Math.max(snap(time), start + frame);
+      } else {
+        const length = end - start;
+        start = Math.max(0, Math.min(duration - length, start + snap(time - grabbedAt)));
+        end = start + length;
+      }
+
+      if (!started) {
+        started = true;
+        onBeginEdit?.();
+      }
+
+      onWorkAreaChange(Math.max(0, start), Math.min(duration, end), false);
+    };
+
+    const onUp = () => {
+      target.releasePointerCapture?.(event.pointerId);
+      target.removeEventListener('pointermove', onMove);
+      target.removeEventListener('pointerup', onUp);
+      target.removeEventListener('pointercancel', onUp);
+    };
+
+    target.addEventListener('pointermove', onMove);
+    target.addEventListener('pointerup', onUp);
+    target.addEventListener('pointercancel', onUp);
+  };
+
   const scrubPointer = useRef<number | null>(null);
   const { major, minor, frameBased } = getTickSteps(pixelsPerSecond, fps);
   const tickCount = Math.ceil(duration / minor);
@@ -191,15 +262,24 @@ export default function TimelineRuler({
               </span>
             ))}
           </div>
-          <div className="tl-work-area">
-            <span className="tl-work-handle tl-work-start" />
-            <span className="tl-work-handle tl-work-end" />
-          </div>
           <div
-            className="tl-cache-band"
-            style={{ width: `${Math.min(100, (currentTime / duration) * 100)}%` }}
+            className={'tl-work-area' + (workArea ? ' is-set' : '')}
+            style={{
+              left: workStart * pixelsPerSecond,
+              width: Math.max(2, (workEnd - workStart) * pixelsPerSecond),
+              right: 'auto',
+            }}
+            title="Work area: drag the ends to set it, drag the bar to move it"
+            onPointerDown={(event) => beginWorkAreaDrag(event, 'move')}
           >
-            <span className="tl-disk-cache" />
+            <span
+              className="tl-work-handle tl-work-start"
+              onPointerDown={(event) => beginWorkAreaDrag(event, 'start')}
+            />
+            <span
+              className="tl-work-handle tl-work-end"
+              onPointerDown={(event) => beginWorkAreaDrag(event, 'end')}
+            />
           </div>
           <div className="tl-ruler-playhead" style={{ left: `${currentTime * pixelsPerSecond}px` }}>
             <span />

@@ -62,6 +62,13 @@ function formatSeconds(seconds: number): string {
   return `${seconds.toFixed(2)}s`;
 }
 
+function getLayerSpan(layer: EditorLayerProperties): number {
+  return (
+    Math.max(0, (layer.outPoint ?? 0) - (layer.inPoint ?? 0)) *
+    (Math.max(0.01, layer.stretch ?? 100) / 100)
+  );
+}
+
 function buildLayerMenu(
   editor: EditorApi,
   request: LayerMenuRequest,
@@ -326,13 +333,20 @@ function buildLayerMenu(
       onSelect: () => window.dispatchEvent(new CustomEvent('brx-timeline-select-all')),
     },
     {
+      id: 'work-area-to-layer',
+      label: 'Set Work Area to Layer',
+      onSelect: () => {
+        const start = primary.startTime ?? 0;
+
+        editor.setWorkAreaRange(start, start + getLayerSpan(primary));
+      },
+    },
+    {
       id: 'info',
       label: 'Info...',
       onSelect: () => {
         const start = primary.startTime ?? 0;
-        const span =
-          Math.max(0, (primary.outPoint ?? 0) - (primary.inPoint ?? 0)) *
-          (Math.max(0.01, primary.stretch ?? 100) / 100);
+        const span = getLayerSpan(primary);
 
         notify(
           `${primary.name} · ${primary.type} · ${Math.round(primary.width)}×${Math.round(primary.height)}` +
@@ -465,6 +479,25 @@ function buildRulerMenu(
       label: 'Clear All Bookmarks',
       disabled: editor.bookmarks.length === 0,
       onSelect: () => editor.clearBookmarks(),
+    },
+    separatorItem,
+    {
+      id: 'work-start',
+      label: 'Set Work Area Start Here',
+      shortcut: 'B',
+      onSelect: () => editor.setWorkAreaStart(request.time),
+    },
+    {
+      id: 'work-end',
+      label: 'Set Work Area End Here',
+      shortcut: 'N',
+      onSelect: () => editor.setWorkAreaEnd(request.time),
+    },
+    {
+      id: 'work-reset',
+      label: 'Reset Work Area',
+      disabled: !editor.workArea,
+      onSelect: () => editor.resetWorkArea(),
     },
     separatorItem,
     { id: 'jump-start', label: 'Jump to Start', onSelect: () => editor.seekTimeline(0) },

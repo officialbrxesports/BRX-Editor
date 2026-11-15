@@ -12,6 +12,11 @@ import {
 } from '../../../config';
 import type { EditorLayerProperties } from '../../project/project.types';
 import { applyGroupInheritance } from '../groupUtils';
+import {
+  getPreviewResolution,
+  getResolutionFactor,
+  subscribePreviewResolution,
+} from './previewResolution';
 
 import {
   drawLayerCanvas,
@@ -167,7 +172,10 @@ export function usePreviewCanvas({
       ? PLAYBACK_BACKING_SIDE
       : PREVIEW_MAX_BACKING_SIDE;
 
-    let renderScale = Math.min(1, wantedWidth / safeWidth);
+    // Auto follows the size on screen; the others are a share of the comp.
+    let renderScale =
+      getResolutionFactor(getPreviewResolution()) ??
+      Math.min(1, wantedWidth / safeWidth);
     renderScale = Math.min(
       renderScale,
       sideCap / Math.max(safeWidth, safeHeight),
@@ -506,6 +514,17 @@ export function usePreviewCanvas({
     context.restore();
   };
 
+  // A change of the preview resolution asks for a new frame.
+  const [resolutionVersion, setResolutionVersion] = useState(0);
+
+  useEffect(
+    () =>
+      subscribePreviewResolution(() =>
+        setResolutionVersion((version) => version + 1),
+      ),
+    [],
+  );
+
   // Keep the on-screen canvas size up to date (resize and viewer zoom).
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -573,6 +592,7 @@ export function usePreviewCanvas({
     width,
     height,
     viewWidth,
+    resolutionVersion,
     currentTime,
     isPlaying,
     layers,

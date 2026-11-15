@@ -176,3 +176,27 @@
   background: var(--tl-playhead);
   clip-path: polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%);
 }
+
+/* ===== Part 6: work area ===== */
+.tl-work-area {
+  cursor: grab;
+  touch-action: none;
+}
+
+.tl-work-area:not(.is-set) {
+  background: #5f5f5f;
+}
+
+.tl-work-handle {
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.tl-work-handle::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: -5px;
+  right: -5px;
+}

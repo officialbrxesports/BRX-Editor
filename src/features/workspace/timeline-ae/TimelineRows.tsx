@@ -34,6 +34,7 @@ type TimelineRowsProps = {
   pixelsPerSecond: number;
   zoom?: number;
   onZoomChange?: (zoom: number) => void;
+  workArea?: { start: number; end: number } | null;
   fps: number;
   snapping: boolean;
   onSelectLayer: (layerId: string | null) => void;
@@ -219,6 +220,7 @@ export default function TimelineRows({
   pixelsPerSecond,
   zoom = 100,
   onZoomChange,
+  workArea = null,
   fps,
   snapping,
   onSelectLayer,
@@ -2159,6 +2161,18 @@ export default function TimelineRows({
           <div className="tl-playhead-line" style={{ left: `${currentTime * pixelsPerSecond}px` }}>
             <span className="tl-playhead-triangle" />
           </div>
+          {workArea && (
+            <>
+              <div
+                className="tl-work-shade"
+                style={{ left: 0, width: workArea.start * pixelsPerSecond }}
+              />
+              <div
+                className="tl-work-shade"
+                style={{ left: workArea.end * pixelsPerSecond, right: 0 }}
+              />
+            </>
+          )}
           {marquee && <div className="tl-marquee" style={marquee} />}
           {dragTooltip && (
             <div className="tl-drag-tooltip" style={{ left: dragTooltip.x, top: dragTooltip.y }}>
