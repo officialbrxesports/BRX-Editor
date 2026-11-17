@@ -35,6 +35,16 @@ import {
   subscribePreviewResolution,
   type PreviewResolution,
 } from './previewResolution';
+import PreviewGuidesLayer from './PreviewGuides';
+import PreviewRulers from './PreviewRulers';
+import {
+  clearGuides,
+  getPreviewGuides,
+  GRID_SIZES,
+  subscribePreviewGuides,
+  updatePreviewGuides,
+} from './previewGuides';
+import ContextMenu, { type ContextMenuItem } from '../../../components/common/ContextMenu';
 
 type PreviewPanelProps = {
   width?: number;
@@ -281,6 +291,7 @@ export default function PreviewPanel({
   // zoom = real scale in percent (6..800). zoom <= 0 means "Fit".
 
   const stageRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const navBoxRef = useRef<HTMLDivElement>(null);
   const navCanvasRef = useRef<HTMLCanvasElement>(null);
   const navDraggingRef = useRef(false);
@@ -810,7 +821,7 @@ export default function PreviewPanel({
     const element = target as HTMLElement | null;
 
     return !element?.closest(
-      '.preview-layer-interaction, .preview-handle, .preview-navigator, .preview-zoom-badge, textarea',
+      '.preview-layer-interaction, .preview-handle, .preview-guide-line, .preview-navigator, .preview-zoom-badge, textarea',
     );
   };
 
@@ -937,6 +948,67 @@ export default function PreviewPanel({
     [editingText, onEditText],
   );
 
+  // View aids: rulers, grid, guides, safe margins.
+  const guides = useSyncExternalStore(subscribePreviewGuides, getPreviewGuides);
+  const [viewMenu, setViewMenu] = useState<{ x: number; y: number } | null>(null);
+
+  const viewMenuItems = (): ContextMenuItem[] => [
+    {
+      id: 'rulers',
+      label: 'Show Rulers',
+      checked: guides.rulers,
+      onSelect: () => updatePreviewGuides({ rulers: !guides.rulers }),
+    },
+    {
+      id: 'grid',
+      label: 'Show Grid',
+      checked: guides.grid,
+      onSelect: () => updatePreviewGuides({ grid: !guides.grid }),
+    },
+    {
+      id: 'safe',
+      label: 'Show Safe Margins',
+      checked: guides.safeMargins,
+      onSelect: () => updatePreviewGuides({ safeMargins: !guides.safeMargins }),
+    },
+    { type: 'separator' },
+    {
+      id: 'snap-guides',
+      label: 'Snap to Guides',
+      checked: guides.snapGuides,
+      onSelect: () => updatePreviewGuides({ snapGuides: !guides.snapGuides }),
+    },
+    {
+      id: 'snap-grid',
+      label: 'Snap to Grid',
+      checked: guides.snapGrid,
+      onSelect: () => updatePreviewGuides({ snapGrid: !guides.snapGrid }),
+    },
+    {
+      id: 'lock-guides',
+      label: 'Lock Guides',
+      checked: guides.guidesLocked,
+      onSelect: () => updatePreviewGuides({ guidesLocked: !guides.guidesLocked }),
+    },
+    {
+      id: 'grid-size',
+      label: 'Grid Size',
+      children: GRID_SIZES.map((size) => ({
+        id: 'grid-' + size,
+        label: size + ' px',
+        checked: guides.gridSize === size,
+        onSelect: () => updatePreviewGuides({ gridSize: size }),
+      })),
+    },
+    { type: 'separator' },
+    {
+      id: 'clear-guides',
+      label: 'Clear Guides',
+      disabled: guides.v.length + guides.h.length === 0,
+      onSelect: () => clearGuides(),
+    },
+  ];
+
   // The selection overlay follows the selected, visible, active layer.
   const overlayLayer =
     previewLayers.find(
@@ -988,7 +1060,7 @@ export default function PreviewPanel({
   );
 
   return (
-    <section className="preview-panel">
+    <section className="preview-panel" ref={panelRef}>
       <div className="panel-header">
         <div className="panel-title">
           <span className="status-dot" />
@@ -1370,6 +1442,12 @@ export default function PreviewPanel({
           })}
         </div>
 
+        <PreviewGuidesLayer
+          compWidth={safeWidth}
+          compHeight={safeHeight}
+          viewScale={viewScale}
+        />
+
         <PreviewOverlay
           layer={overlayLayer}
           world={overlayWorld}
@@ -1387,6 +1465,16 @@ export default function PreviewPanel({
         </div>
         </div>
       </div>
+
+      {guides.rulers && (
+        <PreviewRulers
+          stageRef={stageRef}
+          panelRef={panelRef}
+          viewScale={viewScale}
+          compWidth={safeWidth}
+          compHeight={safeHeight}
+        />
+      )}
 
       {showNavigator && (
         <div
@@ -1430,6 +1518,16 @@ export default function PreviewPanel({
       >
         {zoomLabel}
       </button>
+
+      {viewMenu && (
+        <ContextMenu
+          key={viewMenu.x + ':' + viewMenu.y}
+          x={viewMenu.x}
+          y={viewMenu.y}
+          items={viewMenuItems()}
+          onClose={() => setViewMenu(null)}
+        />
+      )}
 
       <div className="preview-controls">
         <div className="preview-playback">
@@ -1561,8 +1659,22 @@ export default function PreviewPanel({
             <MaterialIcon name="zoom_in" size={14} />
           </button>
 
+          <button
+            className={'preview-control-button' + (guides.rulers || guides.grid || guides.safeMargins ? ' is-active' : '')}
+            type="button"
+            title="View options: rulers, grid, guides, safe margins"
+            aria-label="View options"
+            aria-haspopup="menu"
+            onClick={(event) => {
+              const bounds = event.currentTarget.getBoundingClientRect();
+              setViewMenu({ x: bounds.left, y: bounds.top });
+            }}
+          >
+            <MaterialIcon name="straighten" size={14} />
+          </button>
+
           <select
-            className="preview-resolution"
+            className="preview-resolution-select"
             title="Preview resolution (only the preview, not the project)"
             aria-label="Preview resolution"
             value={previewResolution}

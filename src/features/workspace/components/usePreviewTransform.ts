@@ -10,6 +10,7 @@ import type {
 } from '../../project/project.types';
 
 import type { PreviewOverlayApi } from './PreviewOverlay';
+import { getPreviewGuides } from './previewGuides';
 import type { WorldTransform } from './previewCanvas';
 
 interface UsePreviewTransformOptions {
@@ -332,27 +333,43 @@ export function usePreviewTransform({
           const positionX = drag.worldX + dx;
           const positionY = drag.worldY + dy;
 
-          const snapX = findSnap(
-            [
-              positionX,
-              positionX + drag.boxMinX,
-              positionX + drag.boxMaxX,
-              positionX + (drag.boxMinX + drag.boxMaxX) / 2,
-            ],
-            [0, safeWidth / 2, safeWidth],
-            threshold,
-          );
+          // Targets: the composition centre and edges, plus (when switched
+          // on) the guides and the nearest grid lines.
+          const view = getPreviewGuides();
+          const featuresX = [
+            positionX,
+            positionX + drag.boxMinX,
+            positionX + drag.boxMaxX,
+            positionX + (drag.boxMinX + drag.boxMaxX) / 2,
+          ];
+          const featuresY = [
+            positionY,
+            positionY + drag.boxMinY,
+            positionY + drag.boxMaxY,
+            positionY + (drag.boxMinY + drag.boxMaxY) / 2,
+          ];
+          const targetsX = [0, safeWidth / 2, safeWidth];
+          const targetsY = [0, safeHeight / 2, safeHeight];
 
-          const snapY = findSnap(
-            [
-              positionY,
-              positionY + drag.boxMinY,
-              positionY + drag.boxMaxY,
-              positionY + (drag.boxMinY + drag.boxMaxY) / 2,
-            ],
-            [0, safeHeight / 2, safeHeight],
-            threshold,
-          );
+          if (view.snapGuides) {
+            targetsX.push(...view.v);
+            targetsY.push(...view.h);
+          }
+
+          if (view.snapGrid && view.gridSize > 0) {
+            for (const feature of featuresX) {
+              const base = Math.floor(feature / view.gridSize) * view.gridSize;
+              targetsX.push(base, base + view.gridSize);
+            }
+
+            for (const feature of featuresY) {
+              const base = Math.floor(feature / view.gridSize) * view.gridSize;
+              targetsY.push(base, base + view.gridSize);
+            }
+          }
+
+          const snapX = findSnap(featuresX, targetsX, threshold);
+          const snapY = findSnap(featuresY, targetsY, threshold);
 
           if (snapX) {
             dx += snapX.delta;
