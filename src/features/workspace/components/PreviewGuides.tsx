@@ -5,7 +5,7 @@ import {
   moveGuide,
   removeGuide,
   subscribePreviewGuides,
-} from './previewGuides';
+} from './guideSettings';
 
 import './PreviewGuides.css';
 

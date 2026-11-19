@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { addGuide, moveGuide, removeGuide, getPreviewGuides } from './previewGuides';
+import { addGuide, moveGuide, removeGuide, getPreviewGuides } from './guideSettings';
 
 import './PreviewGuides.css';
 

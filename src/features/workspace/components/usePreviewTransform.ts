@@ -10,7 +10,7 @@ import type {
 } from '../../project/project.types';
 
 import type { PreviewOverlayApi } from './PreviewOverlay';
-import { getPreviewGuides } from './previewGuides';
+import { getPreviewGuides } from './guideSettings';
 import type { WorldTransform } from './previewCanvas';
 
 interface UsePreviewTransformOptions {

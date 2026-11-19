@@ -45,7 +45,7 @@ import {
   GRID_SIZES,
   subscribePreviewGuides,
   updatePreviewGuides,
-} from './previewGuides';
+} from './guideSettings';
 import ContextMenu, { type ContextMenuItem } from '../../../components/common/ContextMenu';
 
 type PreviewPanelProps = {
