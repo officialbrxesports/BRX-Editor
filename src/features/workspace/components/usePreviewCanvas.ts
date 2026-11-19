@@ -12,6 +12,7 @@ import {
 } from '../../../config';
 import type { EditorLayerProperties } from '../../project/project.types';
 import { applyGroupInheritance } from '../groupUtils';
+import { reportRenderTime } from './renderStats';
 import {
   getPreviewResolution,
   getResolutionFactor,
@@ -559,6 +560,14 @@ export function usePreviewCanvas({
     let dirty = true;
     const minInterval = 1000 / PLAYBACK_MAX_FPS - 1;
 
+    // Draws a frame and reports how long it took ("Frame Render Time").
+    const timedRender = () => {
+      const started = performance.now();
+
+      renderRef.current();
+      reportRenderTime(performance.now() - started);
+    };
+
     const tick = (now: number) => {
       animationFrame = 0;
 
@@ -569,7 +578,7 @@ export function usePreviewCanvas({
       if (isPlaying) {
         if (now - lastDraw >= minInterval) {
           lastDraw = now;
-          renderRef.current();
+          timedRender();
         }
 
         animationFrame = requestAnimationFrame(tick);
@@ -578,7 +587,7 @@ export function usePreviewCanvas({
 
       if (dirty) {
         dirty = false;
-        renderRef.current();
+        timedRender();
       }
     };
 

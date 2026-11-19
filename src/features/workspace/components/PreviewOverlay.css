@@ -146,3 +146,34 @@
   color: #ddd;
   font-size: 11px;
 }
+
+/* ===== Part 8: info and render time ===== */
+.preview-render-time {
+  margin-left: 8px;
+  color: #9aa3ad;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.info-channel.is-red {
+  color: #ff6b6b;
+}
+
+.info-channel.is-green {
+  color: #6bd96b;
+}
+
+.info-channel.is-blue {
+  color: #6ba8ff;
+}
+
+.info-swatch {
+  width: 22px;
+  height: 14px;
+  border: 1px solid #555;
+  background-image:
+    linear-gradient(45deg, #444 25%, transparent 25%, transparent 75%, #444 75%),
+    linear-gradient(45deg, #444 25%, transparent 25%, transparent 75%, #444 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+}

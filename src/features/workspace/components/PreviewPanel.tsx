@@ -37,6 +37,8 @@ import {
 } from './previewResolution';
 import PreviewGuidesLayer from './PreviewGuides';
 import PreviewRulers from './PreviewRulers';
+import RenderTimeLabel from './RenderTimeLabel';
+import { getPointerInfo, readPixel, setPointerInfo } from './pointerInfo';
 import {
   clearGuides,
   getPreviewGuides,
@@ -735,6 +737,7 @@ export default function PreviewPanel({
     event: React.PointerEvent<HTMLDivElement>,
   ) => {
     overlayApiRef.current?.setPointerType(event.pointerType);
+    reportPointer(event.clientX, event.clientY);
 
     const touch = touchesRef.current.get(event.pointerId);
 
@@ -947,6 +950,50 @@ export default function PreviewPanel({
     },
     [editingText, onEditText],
   );
+
+  // The Info panel: where the pointer is in the composition and the colour
+  // under it. Read at most once per frame; the colour is not read while
+  // playing, so it can never slow playback down.
+  const pointerFrameRef = useRef(0);
+
+  const reportPointer = (clientX: number, clientY: number) => {
+    if (pointerFrameRef.current) {
+      return;
+    }
+
+    pointerFrameRef.current = requestAnimationFrame(() => {
+      pointerFrameRef.current = 0;
+
+      const frame = canvasRef.current;
+
+      if (!frame) {
+        return;
+      }
+
+      const bounds = frame.getBoundingClientRect();
+      const x = Math.floor(((clientX - bounds.left) / bounds.width) * safeWidth);
+      const y = Math.floor(((clientY - bounds.top) / bounds.height) * safeHeight);
+      const inside = x >= 0 && y >= 0 && x < safeWidth && y < safeHeight;
+      const source = frame.querySelector('canvas');
+      const previous = getPointerInfo();
+
+      let color: [number, number, number, number] | null = null;
+
+      if (inside && source && !isPlaying) {
+        color = readPixel(source, (x + 0.5) / safeWidth, (y + 0.5) / safeHeight);
+      }
+
+      setPointerInfo({
+        x,
+        y,
+        inside,
+        r: inside ? color?.[0] ?? previous?.r ?? 0 : 0,
+        g: inside ? color?.[1] ?? previous?.g ?? 0 : 0,
+        b: inside ? color?.[2] ?? previous?.b ?? 0 : 0,
+        a: inside ? color?.[3] ?? previous?.a ?? 0 : 0,
+      });
+    });
+  };
 
   // View aids: rulers, grid, guides, safe margins.
   const guides = useSyncExternalStore(subscribePreviewGuides, getPreviewGuides);
@@ -1691,6 +1738,10 @@ export default function PreviewPanel({
 
           <span className="preview-fps">
             {fps} FPS
+          </span>
+
+          <span className="preview-render-time" title="Frame render time">
+            <RenderTimeLabel />
           </span>
         </div>
       </div>

@@ -34,6 +34,7 @@ import type {
 
 import PropertiesPanel from './PropertiesPanel';
 import MaterialIcon from './MaterialIcon';
+import InfoReadout from './InfoReadout';
 
 type MenuBarProps = {
   projectName: string;
@@ -800,16 +801,7 @@ export function RightPanelStack({
                   </div>
                 )}
 
-                {section === 'Info' && (
-                  <div className="ae-info-grid">
-                    <span>R: —</span>
-                    <span>G: —</span>
-                    <span>B: —</span>
-                    <span>A: —</span>
-                    <span>X: —</span>
-                    <span>Y: —</span>
-                  </div>
-                )}
+                {section === 'Info' && <InfoReadout />}
 
                 {section === 'Audio' && (
                   <div className="ae-audio-meter">

@@ -32,6 +32,7 @@ import type {
 } from '../../project/project.types';
 import TimelineRows from './TimelineRows';
 import type { MenuRequest } from '../WorkspaceMenus';
+import RenderTimeLabel from '../components/RenderTimeLabel';
 import TimelineRuler from './TimelineRuler';
 import './timeline-ae.css';
 import './timeline-ae-footer.css';
@@ -536,7 +537,7 @@ export default function TimelineAe({
           <button type="button" title="Expand properties">⌘</button>
           <button type="button" title="Timeline settings">⚙</button>
         </div>
-        <span className="tl-render-time">Frame Render Time&nbsp; <b>0ms</b></span>
+        <span className="tl-render-time">Frame Render Time&nbsp; <RenderTimeLabel /></span>
         <button className="tl-toggle-modes" type="button" aria-pressed={showModes} onClick={() => setShowModes((value) => !value)}>
           {showModes ? 'Show Switches' : 'Show Modes'}
         </button>
